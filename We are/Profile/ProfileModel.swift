@@ -8,9 +8,14 @@ final class ProfileModel: ObservableObject {
     @Published var email: String = "skillhub@gmail.com"
     @Published var avatar: UIImage? = nil
     @Published var rating: Double = 4.0
+    
+    @Published var skills: [String] = []
 
-    // NEW: опыт работы
     @Published var workplaces: [Workplace] = []
+    
+    @Published var languages: [LanguageSkill] = [
+        .init(language: .init(code: "ru", name: "Русский"), level: .c2) // пример «Русский — Родной»
+    ]
 
     private enum Keys {
         static let firstName = "profile.firstName"

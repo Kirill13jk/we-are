@@ -4,10 +4,17 @@ import SwiftUI
 struct WorkEditView: View {
     @Environment(\.dismiss) private var dismiss
 
-    @State var work: Workplace
-    var onSave: (Workplace, Bool) -> Void   // (work, isDelete)
+    // Редактируем копию записи
+    @State private var draft: Workplace
+    @State private var isCurrent: Bool
 
-    @State private var isCurrent: Bool = false
+    let onFinish: (Workplace, Bool) -> Void   // (updated, isDelete)
+
+    init(work: Workplace, onFinish: @escaping (Workplace, Bool) -> Void) {
+        _draft = State(initialValue: work)
+        _isCurrent = State(initialValue: work.end == nil)
+        self.onFinish = onFinish
+    }
 
     var body: some View {
         NavigationStack {
@@ -16,40 +23,45 @@ struct WorkEditView: View {
 
                     Group {
                         Text("Организация").font(.headline)
-                        TextField("Название компании", text: $work.company)
-                            .modifier(FilledField())
 
-                        TextField("Должность", text: $work.position)
-                            .modifier(FilledField())
+                        TextField("Название компании", text: $draft.company)
+                            .modifier(WorkFieldBox())
+
+                        TextField("Должность", text: $draft.position)
+                            .modifier(WorkFieldBox())
                     }
 
                     Group {
                         Text("Начало работы").font(.headline)
-                        DatePicker("", selection: $work.start, displayedComponents: .date)
+
+                        DatePicker("",
+                                   selection: $draft.start,
+                                   displayedComponents: .date)
                             .labelsHidden()
-                            .frame(maxWidth: .infinity)
-                            .modifier(FilledField())
+                            .modifier(WorkFieldBox())
                     }
 
                     Group {
                         Text("Окончание").font(.headline)
-                        DatePicker("", selection: Binding<Date>(
-                            get: { work.end ?? Date() },
-                            set: { work.end = $0 }
-                        ), displayedComponents: .date)
-                        .labelsHidden()
-                        .disabled(isCurrent)
-                        .opacity(isCurrent ? 0.5 : 1)
-                        .modifier(FilledField())
+
+                        DatePicker("",
+                                   selection: endBinding,
+                                   displayedComponents: .date)
+                            .labelsHidden()
+                            .modifier(WorkFieldBox())
+                            .disabled(isCurrent)
+                            .opacity(isCurrent ? 0.5 : 1)
 
                         Toggle("По настоящее время", isOn: $isCurrent)
-                            .onChange(of: isCurrent) { _, v in work.end = v ? nil : (work.end ?? Date()) }
+                            .onChange(of: isCurrent) { _, v in
+                                if v { draft.end = nil }
+                                else if draft.end == nil { draft.end = Date() }
+                            }
                     }
 
-                    // Удалить
                     if existingRecord {
                         Button(role: .destructive) {
-                            onSave(work, true)
+                            onFinish(draft, true)
                             dismiss()
                         } label: {
                             HStack(spacing: 8) {
@@ -64,11 +76,12 @@ struct WorkEditView: View {
                 }
                 .padding(16)
             }
-            .navigationTitle("Место работы")
+            // Заголовок: показываем должность, если она не пустая
+            .navigationTitle(draft.position.isEmpty ? "Место работы" : draft.position)
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 Button {
-                    onSave(work, false)
+                    onFinish(draft, false)
                     dismiss()
                 } label: {
                     Text("Сохранить")
@@ -82,9 +95,30 @@ struct WorkEditView: View {
                 .padding(.vertical, 10)
                 .background(Color(.systemGray6))
             }
-            .onAppear { isCurrent = (work.end == nil) }
         }
     }
 
-    private var existingRecord: Bool { work.company.isEmpty == false || work.position.isEmpty == false }
+    // Binding для опциональной даты окончания
+    private var endBinding: Binding<Date> {
+        Binding<Date>(
+            get: { draft.end ?? Date() },
+            set: { draft.end = $0 }
+        )
+    }
+
+    // Понимаем, что это существующая запись (показывать "Удалить")
+    private var existingRecord: Bool {
+        !draft.company.isEmpty || !draft.position.isEmpty
+    }
+}
+
+// Локальный модификатор под поле (уникальное имя — не конфликтует с другими файлам)
+private struct WorkFieldBox: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
 }

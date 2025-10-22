@@ -13,20 +13,26 @@ enum ImageAsset {
 #endif
 
 
+// MARK: - Профиль
+
 struct ProfileScreen: View {
-    @State private var rating: Double = 4.0    
+    @State private var rating: Double = 4.0
     @State private var certificates: [Certificate] = []
     @State private var pickedItems: [PhotosPickerItem] = []
-    
     @State private var companies: [Company] = Company.demoList
-    
+
+    // Хранение языков в UserDefaults
+    @AppStorage("profile.languages.v1") private var langsData: Data = Data()
+    @State private var langs: [LanguageSkill] = []
+    @State private var showAddLanguage = false
+
     @EnvironmentObject private var profile: ProfileModel
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    
+
                     // MARK: Профиль — аватар, имя, почта
                     VStack(spacing: 8) {
                         if let img = profile.avatar {
@@ -42,12 +48,9 @@ struct ProfileScreen: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        Text([profile.firstName, profile.lastName]
-                                .filter { !$0.isEmpty }
-                                .joined(separator: " "))
+                        Text([profile.firstName, profile.lastName].filter{ !$0.isEmpty }.joined(separator: " "))
                             .font(.title2.weight(.semibold))
                             .foregroundStyle(Color.accentColor)
-
 
                         Text(profile.email)
                             .font(.callout)
@@ -55,29 +58,29 @@ struct ProfileScreen: View {
                     }
                     .frame(maxWidth: .infinity)
 
-
-                    // MARK: Рейтинг (без числа)
+                    // MARK: Рейтинг
                     HStack(spacing: 12) {
-                        Text("Рейтинг сотрудника")
+                        Text("Рейтинг сотрудника").font(.headline)
+                        Spacer(minLength: 8)
+                        StarsView(rating: rating)
+                        Text(String(format: "%.1f", rating))
                             .font(.headline)
-                        Spacer()
-                        StarsView(rating: rating)      // ← только звезды
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 20)
 
                     // MARK: Быстрые действия
                     HStack(spacing: 12) {
-                        QuickAction(icon: "bookmark",           title: "Избранное") { }
-                        QuickAction(icon: "qrcode.viewfinder",   title: "Сканер") { }
-                        QuickAction(icon: "text.bubble",         title: "Мои отзывы") { }
-                        QuickAction(icon: "dollarsign.circle",   title: "Чаевые") { }
+                        QuickAction(icon: "bookmark",         title: "Избранное") {}
+                        QuickAction(icon: "qrcode.viewfinder", title: "Сканер") {}
+                        QuickAction(icon: "text.bubble",       title: "Мои отзывы") {}
+                        QuickAction(icon: "dollarsign.circle", title: "Чаевые") {}
                     }
                     .padding(.horizontal, 20)
 
                     // MARK: Текущее место работы
                     SectionHeader("Текущее место работы").padding(.horizontal, 20)
                     if companies.isEmpty {
-                        // пустое состояние
                         Card {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Пока нет текущих мест работы").font(.headline)
@@ -96,7 +99,6 @@ struct ProfileScreen: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                    
                     } else {
                         VStack(spacing: 12) {
                             ForEach(companies) { company in
@@ -123,14 +125,14 @@ struct ProfileScreen: View {
                                                 HStack {
                                                     Text("Должность:").foregroundStyle(.secondary)
                                                     Text("Стажер").foregroundStyle(Color.accentColor)
-                                                }.font(.subheadline)
+                                                }
+                                                .font(.subheadline)
                                             }
                                             Spacer()
                                             Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                                         }
                                     }
                                     .padding(.horizontal, 20)
-
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -139,90 +141,99 @@ struct ProfileScreen: View {
 
                     // MARK: Данные
                     SectionHeader("Данные").padding(.horizontal, 20)
-                    NavigationLink {
-                        ProfileDataView()
-                    } label: {
+                    NavigationLink { ProfileDataView() } label: {
                         Card {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(profile.fullName)
                                 Text(profile.email).foregroundStyle(.secondary)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .overlay(alignment: .trailing) { AccessoryChip().padding(12) }
                         .padding(.horizontal, 20)
                     }
                     .buttonStyle(.plain)
 
                     // MARK: Опыт работы
                     SectionHeader("Опыт работы").padding(.horizontal, 20)
-                    if profile.workplaces.isEmpty {
-                        Card {
-                            HStack {
-                                Text("Пока пусто").foregroundStyle(.secondary)
-                                Spacer()
-                                NavigationLink("Добавить") { WorkExperienceListView() }
-                                    .font(.headline)
-                            }
-                        }.padding(.horizontal, 20)
-                    } else {
-                        VStack(spacing: 12) {
-                            ForEach(profile.workplaces.prefix(2)) { w in
-                                Card { WorkplaceCard(work: w) }
-                            }
-                            NavigationLink { WorkExperienceListView() } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "plus.circle")
-                                    Text("Добавить место работы")
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
+                    NavigationLink { WorkExperienceListView() } label: {
+                        TappableCard {
+                            if profile.workplaces.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Пока нет опыта работы").font(.headline)
+                                    Text("Нажмите, чтобы добавить место работы")
+                                        .font(.callout).foregroundStyle(.secondary)
                                 }
-                                .font(.headline)
-                                .padding(.vertical, 6)
+                            } else {
+                                VStack(spacing: 12) {
+                                    ForEach(profile.workplaces.prefix(2)) { w in
+                                        WorkplaceCard(work: w) // без внутренней стрелки
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 20)
                     }
+                    .buttonStyle(.plain)
 
                     // MARK: Ключевые навыки
                     SectionHeader("Ключевые навыки").padding(.horizontal, 20)
-                    Card {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Bullet("Умение работать с кассовым аппаратом")
-                            Bullet("Опыт консультирования покупателей")
-                            Bullet("Опыт приёма и выкладки товара")
-                            Bullet("Навыки продажи товара")
-                            Bullet("Навыки ведения отчетности")
+                    NavigationLink { SkillsEditorView(skills: $profile.skills) } label: {
+                        Card {
+                            Group {
+                                if profile.skills.isEmpty {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Пока пусто").foregroundStyle(.secondary)
+                                        Text("Нажмите, чтобы добавить навыки")
+                                            .font(.footnote).foregroundStyle(.tertiary)
+                                    }
+                                } else {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        ForEach(profile.skills, id: \.self) { Bullet($0) }
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .overlay(alignment: .trailing) { AccessoryChip().padding(12) }
+                        .padding(.horizontal, 20)
                     }
-                    .padding(.horizontal, 20)
+                    .buttonStyle(.plain)
 
                     // MARK: Владение языками
                     SectionHeader("Владение языками").padding(.horizontal, 20)
                     Card {
                         VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text("Русский — Родной")
-                                Spacer()
+                            ForEach(langs) { item in
+                                HStack {
+                                    Text("\(item.language.name) — \(item.level == .native ? "Родной" : item.level.title)")
+                                    Spacer()
+                                }
+                                .padding(.vertical, 4)
+                                Divider().opacity(0.12)
                             }
-                            Divider().opacity(0.15)
-                            Button {
-                                // TODO: открыть модалку выбора языка
-                            } label: {
+
+                            Button { showAddLanguage = true } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "plus.circle").foregroundStyle(Color.accentColor)
                                     Text("Добавить язык").foregroundStyle(Color.accentColor)
                                     Spacer()
                                 }
                             }
+                            .padding(.top, 4)
                         }
                     }
                     .padding(.horizontal, 20)
+                    .sheet(isPresented: $showAddLanguage) {
+                        LanguagesPickerView(existing: langs) { merged in
+                            langs = merged
+                        }
+                    }
+
 
                     // MARK: Сертификаты
                     SectionHeader("Сертификаты").padding(.horizontal, 20)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            // + Добавить (галерея)
                             PhotosPicker(selection: $pickedItems, maxSelectionCount: 5, matching: .images) {
                                 AddCertificateCard()
                             }
@@ -252,51 +263,94 @@ struct ProfileScreen: View {
                     Spacer(minLength: 12)
                 }
                 .padding(.bottom, 24)
+                .onAppear { langs = decodeLangs(langsData) }
+                .onChange(of: langs) { oldValue, newValue in
+                    langsData = encodeLangs(newValue)
+                }
+
+            }
+            .onAppear {
+                // 1) грузим из UserDefaults (или дефолт Русский — Родной)
+                langs = decodeLangs(langsData)
+            }
+            .onChange(of: langs) { oldValue, newValue in
+                // 2) автосохранение без депрекейта
+                langsData = encodeLangs(newValue)
             }
             .navigationTitle("Профиль")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: settingsTapped) {
-                        Image("setting-2")
-                            .renderingMode(.original)
-                            .resizable().scaledToFit()
-                            .frame(width: 22, height: 22)
-                            .accessibilityLabel("Настройки")
+                        if ImageAsset.exists("profile-settings") {
+                            Image("profile-settings")
+                                .renderingMode(.original)
+                                .resizable().scaledToFit()
+                                .frame(width: 22, height: 22)
+                        } else {
+                            Image(systemName: "gearshape")
+                                .resizable().scaledToFit()
+                                .frame(width: 22, height: 22)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Настройки")
                 }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: qrTapped) {
-                        Image("qr_code_24")
-                            .renderingMode(.original)
-                            .resizable().scaledToFit()
-                            .frame(width: 22, height: 22)
-                            .accessibilityLabel("QR")
+                        if ImageAsset.exists("profile-qr") {
+                            Image("profile-qr")
+                                .renderingMode(.original)
+                                .resizable().scaledToFit()
+                                .frame(width: 22, height: 22)
+                        } else {
+                            Image(systemName: "qrcode")
+                                .resizable().scaledToFit()
+                                .frame(width: 22, height: 22)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("QR")
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
+
+    // MARK: Persistence helpers
+    private func decodeLangs(_ data: Data) -> [LanguageSkill] {
+        if !data.isEmpty, let arr = try? JSONDecoder().decode([LanguageSkill].self, from: data), !arr.isEmpty {
+            return arr
+        }
+        // дефолт: Русский — Родной
+        let ru = LanguageOption.all.first { $0.code == "ru" } ?? .init(code: "ru", name: "Русский")
+        return [LanguageSkill(language: ru, level: .native)]
+    }
+
+    private func encodeLangs(_ arr: [LanguageSkill]) -> Data {
+        (try? JSONEncoder().encode(arr)) ?? Data()
+    }
+
 }
 
+// MARK: - Вспомогательные UI
 
-private func settingsTapped() {
-    // TODO: открыть экран настроек
-}
-
-private func qrTapped() {
-    // TODO: открыть экран QR
-}
-
-
-// MARK: - Models
-struct Certificate: Identifiable, Equatable {
-    let id: UUID
-    var title: String
-    var modules: Int
-    var progress: Double // 0...1
-    var image: UIImage?
+private struct AccessoryChip: View {
+    var icon: String = "chevron.right"
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color(.systemBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color(.separator), lineWidth: 0.5)
+            )
+            .frame(width: 28, height: 28)
+            .overlay(
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            )
+    }
 }
 
 private struct SectionHeader: View {
@@ -316,19 +370,19 @@ private struct QuickAction: View {
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.title3)
-                    .frame(width: 44, height: 44)
                     .foregroundStyle(Color.accentColor)
+                    .frame(width: 48, height: 48)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemBackground)))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
-                Text(title).font(.footnote)
+                Text(title).font(.footnote).foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 6)
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -426,4 +480,26 @@ private struct CertificateCard: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(.separator), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
     }
+}
+
+
+// MARK: - Прочие модели для экрана
+
+struct Certificate: Identifiable, Equatable {
+    let id: UUID
+    var title: String
+    var modules: Int
+    var progress: Double
+    var image: UIImage?
+}
+
+
+// MARK: - Шапка/навигация кнопки
+
+private func settingsTapped() {
+    // TODO: открыть экран настроек
+}
+
+private func qrTapped() {
+    // TODO: открыть экран QR
 }

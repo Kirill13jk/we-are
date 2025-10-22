@@ -4,8 +4,9 @@ import SwiftUI
 struct WorkExperienceListView: View {
     @EnvironmentObject private var profile: ProfileModel
     @Environment(\.dismiss) private var dismiss
-    @State private var editing: Workplace? = nil
-    @State private var showEditor = false
+
+    // было: editing + showEditor
+    @State private var editing: Workplace?
 
     var body: some View {
         NavigationStack {
@@ -13,132 +14,215 @@ struct WorkExperienceListView: View {
                 VStack(spacing: 12) {
 
                     if profile.workplaces.isEmpty {
-                        // Пустой контейнер
                         Card {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Пока нет опыта работы").font(.headline)
                                 Text("Нажмите «Добавить место работы», чтобы заполнить раздел.")
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
+                                    .font(.callout).foregroundStyle(.secondary)
                             }
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, 4)
                     } else {
-                        // Карточки
                         ForEach(profile.workplaces) { work in
-                            Card {
-                                WorkplaceCard(work: work)
+                            // вся карточка кликабельна — открывает редактор
+                            Button {
+                                editing = work
+                            } label: {
+                                Card { WorkplaceCard(work: work) }
+                                    .padding(.horizontal, 16)
+                                    .overlay(alignment: .trailing) {
+                                        Image(systemName: "paperclip.circle")
+                                            .font(.title3).padding(12)
+                                            .foregroundStyle(.secondary)
+                                    }
                             }
-                            .padding(.horizontal, 16)
+                            .buttonStyle(.plain)
                         }
                     }
 
-                    // Кнопка «Добавить место работы»
+                    // «Добавить место работы»
                     Button {
-                        editing = Workplace()     // пустая запись
-                        showEditor = true
+                        editing = Workplace()   // пустая запись
                     } label: {
-                        Label("Добавить место работы", systemImage: "plus.circle")
-                            .font(.headline)
-                            .foregroundStyle(Color.accentColor)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: 10) {
+                            Image(systemName: "plus.circle")
+                            Text("Добавить место работы")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(Color.accentColor)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16).padding(.top, 8)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
                 }
                 .padding(.vertical, 12)
-                // запас под нижнюю фикс-кнопку
-                .padding(.bottom, 120)
             }
-            .scrollIndicators(.hidden)
-            .background(Color(.systemGroupedBackground))
             .navigationTitle("Опыт работы")
             .navigationBarTitleDisplayMode(.inline)
-
-            // Фиксированная нижняя кнопка по макету
             .safeAreaInset(edge: .bottom) {
-                HStack {
-                    Button {
-                        profile.persist()
-                        dismiss()
-                    } label: {
-                        Text("Сохранить")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .foregroundStyle(.white)
-                            .background(Color.accentColor)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
-                    }
+                Button {
+                    profile.persist()
+                    dismiss()
+                } label: {
+                    Text("Сохранить")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .foregroundStyle(.white)
+                        .background(Color.accentColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                // светлая подложка как на скрине
-                .background(.ultraThinMaterial)
+                .background(Color(.systemGray6))
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom) // чтобы кнопка не прыгала при клавиатуре
-            .sheet(isPresented: $showEditor, onDismiss: { profile.persist() }) {
-                if let editing {
-                    WorkEditView(work: editing) { updated, isDelete in
-                        if isDelete {
-                            profile.workplaces.removeAll { $0.id == updated.id }
-                        } else if let idx = profile.workplaces.firstIndex(where: { $0.id == updated.id }) {
-                            profile.workplaces[idx] = updated
-                        } else {
-                            profile.workplaces.append(updated)
-                        }
+
+            // ВАЖНО: показываем шит только когда item != nil
+            .sheet(item: $editing, onDismiss: { profile.persist() }) { item in
+                WorkEditView(work: item) { updated, isDelete in
+                    if isDelete {
+                        profile.workplaces.removeAll { $0.id == updated.id }
+                    } else if let idx = profile.workplaces.firstIndex(where: { $0.id == updated.id }) {
+                        profile.workplaces[idx] = updated
+                    } else {
+                        profile.workplaces.append(updated)
                     }
+                    editing = nil  // закрыть шит вручную после сохранения/удаления
                 }
             }
         }
     }
 }
 
-
-// Карточка под макет
-struct WorkplaceCard: View {
+private struct WorkRow: View {
     let work: Workplace
+    var edit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // верхняя строка: должность + галочка, справа рейтинг
-            HStack(alignment: .firstTextBaseline) {
-                HStack(spacing: 8) {
-                    Text(work.position.isEmpty ? "—" : work.position)
-                        .font(.headline)
-                    if work.verified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(Color.accentColor)
-                    }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(work.position.isEmpty ? "—" : work.position)
+                    .font(.headline)
+                if work.verified {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(Color.accentColor)
                 }
                 Spacer()
                 if let r = work.rating {
-                    HStack(spacing: 6) {
-                        Image(systemName: "star.fill")
-                            .foregroundStyle(.yellow)
-                        Text(String(format: "%.1f", r))
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill").foregroundStyle(.yellow)
+                        Text(String(format: "%.1f", r)).foregroundStyle(.secondary)
                     }
                     .font(.subheadline)
                 }
             }
 
-            // компания
-            Text("Компания “\(work.company.isEmpty ? "—" : work.company)”")
+            Text("Компания “\(work.company)”")
                 .foregroundStyle(.secondary)
 
-            // период
             Text(WorkFmt.period(work.start, work.end))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
-        .overlay(alignment: .topTrailing) {
-            // иконка «скрепка» в правом-верхнем углу
-            Image(systemName: "paperclip.circle")
-                .font(.title3)
-                .padding(10)
+        .appCard()
+        .contentShape(Rectangle())    // весь контейнер тапаемый
+        .onTapGesture(perform: edit)
+        .overlay(alignment: .bottomTrailing) {
+            Button(action: edit) {
+                Image(systemName: "paperclip.circle")
+                    .font(.title3)
+                    .padding(8)
+            }
         }
+    }
+}
+
+// Универсальный стиль карточки (без конфликта имён с вашим Card)
+private struct AppCardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(.systemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color(.separator), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+    }
+}
+private struct AccessoryChip: View {
+    var icon: String = "chevron.right"
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color(.systemBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color(.separator), lineWidth: 0.5)
+            )
+            .frame(width: 28, height: 28)
+            .overlay(
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            )
+    }
+}
+
+private extension View {
+    func appCard() -> some View { modifier(AppCardModifier()) }
+}
+struct WorkplaceCard: View {
+    let work: Workplace
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+
+            // Заголовок: должность, верификация, рейтинг (★ + число) справа
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(work.position.isEmpty ? "Должность" : work.position)
+                    .font(.headline)
+
+                if work.verified {                     // <- у модели флаг называется verified
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                Spacer()
+
+                if let r = work.rating {               // <- показываем число
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .foregroundStyle(.yellow)
+                        Text(String(format: "%.1f", r))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Text("Компания “\(work.company)”")
+                .font(.subheadline)
+
+            Text(WorkFmt.period(work.start, work.end))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+
+// Общая кликабельная карточка со стрелкой, одинаковый padding/corner/shadow
+struct TappableCard<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        Card { content }
+            .overlay(alignment: .trailing) {
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.tertiary)
+                    .padding(12)
+            }
+            .padding(.horizontal, 16)   // единый отступ
     }
 }
