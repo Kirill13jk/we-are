@@ -24,7 +24,7 @@ struct CompanyScreen: View {
 
                         VStack(alignment: .leading, spacing: 6) {
                             Text(company.name)
-                                .font(.title3.weight(.semibold))
+                                .font(.title3)
                             Text(company.category)
                                 .foregroundStyle(.secondary)
 
@@ -138,7 +138,7 @@ struct CompanyScreen: View {
                 Text("Новости").font(.headline)
                 Spacer()
                 Button("Все") { /* TODO: переход в ленту */ }
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
             }
 
             // Сетка 3×N

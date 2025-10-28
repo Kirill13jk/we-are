@@ -1,11 +1,10 @@
 import SwiftUI
 
-enum Tab: Hashable {
-    case main, catalog, profile
-}
+enum Tab: Hashable { case main, catalog, profile }
 
 struct MainTabView: View {
     @State private var selected: Tab = .main
+    @StateObject private var notifications = NotificationsStore()   // ← добавили
 
     var body: some View {
         TabView(selection: $selected) {
@@ -28,6 +27,7 @@ struct MainTabView: View {
                 }
                 .tag(Tab.profile)
         }
+        .environmentObject(notifications)   // ← теперь переменная есть
         .tint(.accentColor)
     }
 }

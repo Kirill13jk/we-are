@@ -105,7 +105,7 @@ struct LoginView: View {
                     Text("Нет аккаунта?")
                         .foregroundStyle(.secondary)
                     Button("Зарегистрироваться") { /*TODO*/ }
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline)
                         .tint(.accentColor)
                 }
                 .padding(.bottom, 12)

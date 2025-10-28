@@ -196,7 +196,7 @@ struct WorkplaceCard: View {
                         Image(systemName: "star.fill")
                             .foregroundStyle(.yellow)
                         Text(String(format: "%.1f", r))
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 }

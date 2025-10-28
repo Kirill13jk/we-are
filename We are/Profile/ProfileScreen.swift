@@ -1,20 +1,6 @@
 import SwiftUI
 import PhotosUI
 
-#if canImport(UIKit)
-import UIKit
-enum ImageAsset {
-    static func exists(_ name: String) -> Bool { UIImage(named: name) != nil }
-}
-#else
-enum ImageAsset {
-    static func exists(_ name: String) -> Bool { false }
-}
-#endif
-
-
-// MARK: - Профиль
-
 struct ProfileScreen: View {
     @State private var rating: Double = 4.0
     @State private var certificates: [Certificate] = []
@@ -49,7 +35,7 @@ struct ProfileScreen: View {
                         }
 
                         Text([profile.firstName, profile.lastName].filter{ !$0.isEmpty }.joined(separator: " "))
-                            .font(.title2.weight(.semibold))
+                            .font(.title2)
                             .foregroundStyle(Color.accentColor)
 
                         Text(profile.email)
@@ -358,7 +344,7 @@ private struct SectionHeader: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         Text(text)
-            .font(.title3.weight(.semibold))
+            .font(.title3)
             .foregroundStyle(Color.accentColor)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -471,7 +457,7 @@ private struct CertificateCard: View {
                 Image(systemName: "clock.arrow.circlepath")
                 Text("Скачать")
             }
-            .font(.footnote.weight(.semibold))
+            .font(.footnote)
             .foregroundStyle(Color.accentColor)
         }
         .padding(12)
