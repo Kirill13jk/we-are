@@ -1,0 +1,27 @@
+{
+  "title": "SMM",
+  "image": "course-smm",
+  "about": "Описание курса SMM…",
+  "durationHours": 48,
+  "modules": [
+    { "idx": 1, "title": "Основы SMM", "subtitle": "Стартовые понятия" },
+    { "idx": 2, "title": "Контент-план", "subtitle": "Практика" }
+  ],
+  "reviews": [
+    { "author": "Алина", "text": "Очень полезно!", "dateString": "03.03.2022 / 10:30", "rating": 5 }
+  ]
+}
+
+{
+  "title": "English",
+  "image": "course-english",
+  "about": "Описание курса English…",
+  "durationHours": 48,
+  "modules": [
+    { "idx": 1, "title": "Основы Egnlish", "subtitle": "Стартовые понятия" },
+    { "idx": 2, "title": "Контент-план", "subtitle": "Практика" }
+  ],
+  "reviews": [
+    { "author": "Алина", "text": "Очень полезно!", "dateString": "03.03.2022 / 10:30", "rating": 5 }
+  ]
+}

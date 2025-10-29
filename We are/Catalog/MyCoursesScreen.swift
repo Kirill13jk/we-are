@@ -24,14 +24,14 @@ struct MyCoursesScreen: View {
                     VStack(spacing: 12) {
                         CurrentCourseCard(
                             title: "Курсы English",
-                            tag: "Маркетинг",
+                            tag: "Английский",
                             lessons: 10,
                             progress: 0.87,
                             image: "mycourse-current-1"   // ← добавишь ассет
                         )
                         CurrentCourseCard(
                             title: "Курсы English",
-                            tag: "Маркетинг",
+                            tag: "Английский",
                             lessons: 10,
                             progress: 0.87,
                             image: "mycourse-current-1"   // ← добавишь ассет

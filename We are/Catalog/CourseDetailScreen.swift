@@ -1,4 +1,6 @@
+// CourseDetailScreen.swift
 import SwiftUI
+import Foundation
 
 private enum CourseDetailTab { case about, modules, reviews }
 
@@ -9,18 +11,28 @@ struct CourseDetailScreen: View {
     @State private var showReviewSheet = false
     @State private var showThanks = false
 
+    // Динамическая модель экрана
+    @State private var detail: CourseDetailModel
+
+    init(course: CourseItem) {
+        self.course = course
+        _detail = State(initialValue: CourseDetailLoader.load(for: course))
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
 
-                // HEADER как на макете (розовый фон + иллюстрация + play)
+                // Header с иллюстрацией и play
                 ZStack(alignment: .bottomTrailing) {
                     RoundedRectangle(cornerRadius: 24)
                         .fill(Color(.systemPink).opacity(0.18))
                         .frame(height: 180)
                         .overlay(
                             Group {
-                                if let n = course.imageAsset, ImageAsset.exists(n) {
+                                if let n = detail.imageAsset, ImageAsset.exists(n) {
+                                    Image(n).resizable().scaledToFit()
+                                } else if let n = course.imageAsset, ImageAsset.exists(n) {
                                     Image(n).resizable().scaledToFit()
                                 } else {
                                     Image(systemName: "text.book.closed")
@@ -33,7 +45,6 @@ struct CourseDetailScreen: View {
                             alignment: .topLeading
                         )
 
-                    // кружок play → открываем старт урока
                     NavigationLink {
                         LessonStartView(courseTitle: course.title)
                     } label: {
@@ -49,13 +60,12 @@ struct CourseDetailScreen: View {
                     .buttonStyle(.plain)
                     .padding(.trailing, 16)
                     .offset(y: 28)
-
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
 
                 // Название
-                Text("Курсы “\(course.title)”")
+                Text("\(detail.title)")
                     .font(.system(size: 28, weight: .bold))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 28)
@@ -68,10 +78,17 @@ struct CourseDetailScreen: View {
                 // Контент табов
                 Group {
                     switch tab {
-                    case .about: AboutTab()
-                    case .modules: ModulesTab()
+                    case .about:
+                        AboutTab(text: detail.about, hours: detail.durationHours)
+                    case .modules:
+                        ModulesTab(modules: detail.modules, imageName: detail.imageAsset ?? course.imageAsset)
                     case .reviews:
-                        ReviewsTab(openForm: { showReviewSheet = true })
+                        ReviewsTab(
+                            ratingAverage: detail.ratingAverage,
+                            ratingBreakdown: detail.ratingBreakdown,
+                            reviews: detail.reviews,
+                            openForm: { showReviewSheet = true }
+                        )
                     }
                 }
                 .padding(.horizontal, 16)
@@ -80,24 +97,147 @@ struct CourseDetailScreen: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        // Форма отзыва — единственный sheet (не будет предупреждений)
         .sheet(isPresented: $showReviewSheet) {
             ReviewFormSheet(
-                courseTitle: course.title,
-                imageName: course.imageAsset,
-                onSubmit: { _rating, _text in
-                    // тут можешь сохранить отзыв в стор/сервер
+                courseTitle: detail.title,
+                imageName: detail.imageAsset ?? course.imageAsset,
+                onSubmit: { rating, text in
+                    // обновим локальную модель
+                    withAnimation {
+                        detail.reviews.insert(.init(author: "Вы", text: text, dateString: DateFormatter.review.string(from: Date()), rating: rating), at: 0)
+                        detail.recalcRating()
+                    }
                     showThanks = true
                 }
             )
             .presentationDetents([.large])
         }
-        // Поп-ап «Спасибо!»
         .overlay {
             if showThanks {
                 ThanksOverlay { showThanks = false }
             }
         }
+    }
+}
+
+// MARK: - Модель экрана (динамика)
+
+private struct CourseDetailModel {
+    var title: String
+    var imageAsset: String?
+    var about: String
+    var durationHours: Int
+    var modules: [Module]
+    var reviews: [Review]
+    var ratingAverage: Double
+    var ratingBreakdown: [Int: Int] // ключ = 1…5
+
+    struct Module: Identifiable, Codable {
+        let id: UUID
+        let idx: Int
+        let title: String
+        let subtitle: String
+        init(id: UUID = UUID(), idx: Int, title: String, subtitle: String) {
+            self.id = id; self.idx = idx; self.title = title; self.subtitle = subtitle
+        }
+    }
+
+    struct Review: Identifiable, Codable {
+        let id: UUID
+        let author: String
+        let text: String
+        let dateString: String
+        let rating: Int
+        init(id: UUID = UUID(), author: String, text: String, dateString: String, rating: Int) {
+            self.id = id; self.author = author; self.text = text; self.dateString = dateString; self.rating = rating
+        }
+    }
+
+    mutating func recalcRating() {
+        let counts = Dictionary(grouping: reviews, by: { $0.rating }).mapValues(\.count)
+        ratingBreakdown = [1,2,3,4,5].reduce(into: [:]) { $0[$1] = counts[$1] ?? 0 }
+        let sum = reviews.reduce(0) { $0 + $1.rating }
+        ratingAverage = reviews.isEmpty ? 0 : Double(sum) / Double(reviews.count)
+    }
+
+    // Заглушка, если нет JSON
+    static func sample(title: String, image: String?, lessons: Int) -> CourseDetailModel {
+        let mods = (1...max(1, min(8, lessons))).map {
+            Module(idx: $0, title: "Название урока \($0)", subtitle: "Lorem ipsum dolor sit amet")
+        }
+        let revs: [Review] = [
+            .init(author: "Виктор", text: "Lorem ipsum dolor sit amet, consectetur adipiscing…", dateString: "03.03.2022 / 10:30", rating: 5),
+            .init(author: "Дарья", text: loremShort, dateString: "03.03.2022 / 10:30", rating: 4)
+        ]
+        var m = CourseDetailModel(
+            title: title,
+            imageAsset: image,
+            about: loremLong,
+            durationHours: 18,
+            modules: mods,
+            reviews: revs,
+            ratingAverage: 0,
+            ratingBreakdown: [:]
+        )
+        m.recalcRating()
+        return m
+    }
+}
+
+// DTO для JSON
+private struct CourseDetailDTO: Codable {
+    var title: String
+    var image: String?
+    var about: String
+    var durationHours: Int
+    var modules: [CourseDetailModel.Module]
+    var reviews: [CourseDetailModel.Review]
+    var ratingAverage: Double?
+    var ratingBreakdown: [Int: Int]?
+}
+
+private enum CourseDetailLoader {
+    // Маппинг названия карточки → ключ JSON
+    static let lookup: [String: String] = [
+        "Курсы English": "english",
+        "Курсы “SMM”": "smm",
+        "Курсы “Лидерства”": "leadership"
+    ]
+
+    static func load(for course: CourseItem) -> CourseDetailModel {
+        let key = lookup[course.title] ?? fallbackKey(from: course.title)
+        if let url = Bundle.main.url(forResource: "course_\(key)", withExtension: "json"),
+           let data = try? Data(contentsOf: url),
+           let dto = try? JSONDecoder().decode(CourseDetailDTO.self, from: data) {
+
+            var model = CourseDetailModel(
+                title: dto.title,
+                imageAsset: dto.image ?? course.imageAsset,
+                about: dto.about,
+                durationHours: dto.durationHours,
+                modules: dto.modules,
+                reviews: dto.reviews,
+                ratingAverage: dto.ratingAverage ?? 0,
+                ratingBreakdown: dto.ratingBreakdown ?? [:]
+            )
+            // если в JSON не было статистики — посчитаем
+            if dto.ratingAverage == nil || dto.ratingBreakdown == nil {
+                model.recalcRating()
+            }
+            return model
+        }
+
+        // Fallback — заглушка из карточки каталога
+        return CourseDetailModel.sample(title: course.title, image: course.imageAsset, lessons: course.lessons)
+    }
+
+    // Бэкап-ключ, если нет явного соответствия
+    private static func fallbackKey(from title: String) -> String {
+        let ascii = title.folding(options: .diacriticInsensitive, locale: .current)
+        let slug = ascii.replacingOccurrences(of: "[^A-Za-z0-9]+", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+            .lowercased()
+        return slug.isEmpty ? "default" : slug
     }
 }
 
@@ -141,9 +281,11 @@ private struct TabsBar: View {
 // MARK: - Tab: О курсе
 
 private struct AboutTab: View {
+    var text: String
+    var hours: Int
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(loremLong)
+            Text(text)
                 .foregroundStyle(.secondary)
 
             Divider().opacity(0.2)
@@ -153,7 +295,7 @@ private struct AboutTab: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Примерное время прохождения курса")
                         .font(.subheadline)
-                    Text("18 часов")
+                    Text("\(hours) часов")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -166,19 +308,8 @@ private struct AboutTab: View {
 // MARK: - Tab: Модули
 
 private struct ModulesTab: View {
-    private struct ModuleItem: Identifiable {
-        let id = UUID()
-        let idx: Int
-        let title: String
-        let subtitle: String
-    }
-
-    private let modules: [ModuleItem] = [
-        .init(idx: 1, title: "Название урока", subtitle: "Lorem ipsum dolor sit amet"),
-        .init(idx: 2, title: "Название урока", subtitle: "Lorem ipsum dolor sit amet"),
-        .init(idx: 3, title: "Название урока", subtitle: "Lorem ipsum dolor sit amet"),
-        .init(idx: 4, title: "Название урока", subtitle: "Lorem ipsum dolor sit amet")
-    ]
+    var modules: [CourseDetailModel.Module]
+    var imageName: String?
 
     var body: some View {
         VStack(spacing: 18) {
@@ -188,11 +319,8 @@ private struct ModulesTab: View {
                         .fill(Color(.secondarySystemBackground))
                         .frame(width: 88, height: 64)
                         .overlay {
-                            if ImageAsset.exists("course-english") {
-                                Image("course-english")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .padding(6)
+                            if let n = imageName, ImageAsset.exists(n) {
+                                Image(n).resizable().scaledToFit().padding(6)
                             } else {
                                 Image(systemName: "photo").foregroundStyle(.secondary)
                             }
@@ -221,26 +349,37 @@ private struct ModulesTab: View {
     }
 }
 
-
 // MARK: - Tab: Отзывы
 
 private struct ReviewsTab: View {
+    var ratingAverage: Double
+    var ratingBreakdown: [Int: Int]
+    var reviews: [CourseDetailModel.Review]
     var openForm: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            // ленивый «дайджест» рейтинга (для вида)
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading) {
-                    Text("5.0").font(.system(size: 36, weight: .bold))
-                    StarsRow(rating: 4.0)
+                    Text(String(format: "%.1f", ratingAverage))
+                        .font(.system(size: 36, weight: .bold))
+                    StarsRow(rating: ratingAverage)
                         .padding(.top, 2)
                     Text("из 5").font(.footnote).foregroundStyle(.secondary)
                 }
                 Spacer()
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach((0..<5).reversed(), id: \.self) { _ in
-                        Rectangle().fill(Color(.secondarySystemFill)).frame(width: 140, height: 8).clipShape(Capsule())
+                    ForEach((1...5).reversed(), id: \.self) { star in
+                        HStack(spacing: 8) {
+                            Text("\(star)").font(.footnote).foregroundStyle(.secondary)
+                                .frame(width: 14, alignment: .trailing)
+                            Rectangle()
+                                .fill(Color(.secondarySystemFill))
+                                .frame(width: 140, height: 8)
+                                .clipShape(Capsule())
+                            Text("\(ratingBreakdown[star] ?? 0)")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -254,15 +393,15 @@ private struct ReviewsTab: View {
             }
             .padding(.top, 6)
 
-            Text("24 отзыва о курсе")
+            Text("\(reviews.count) отзыв\(reviews.count == 1 ? "" : "а") о курсе")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 2)
 
-            // пара демо-карточек
-            ReviewCard(name: "Виктор", text: "Lorem ipsum dolor sit amet, consectetur adipiscing…", date: "03.03.2022 / 10:30")
-            ReviewCard(name: "Дарья", text: loremShort, date: "03.03.2022 / 10:30", expanded: true)
+            ForEach(reviews) { r in
+                ReviewCard(name: r.author, text: r.text, date: r.dateString)
+            }
         }
     }
 
@@ -270,7 +409,6 @@ private struct ReviewsTab: View {
         var name: String
         var text: String
         var date: String
-        var expanded: Bool = false
         @State private var isExpanded = false
 
         var body: some View {
@@ -283,7 +421,7 @@ private struct ReviewsTab: View {
                     Text(date).font(.footnote).foregroundStyle(.secondary)
                 }
 
-                Text(isExpanded || expanded ? text : String(text.prefix(120)) + "…")
+                Text(isExpanded ? text : String(text.prefix(120)) + (text.count > 120 ? "…" : ""))
                     .foregroundStyle(.secondary)
 
                 HStack {
@@ -302,7 +440,7 @@ private struct ReviewsTab: View {
     }
 }
 
-// MARK: - Review form (sheet)
+// MARK: - Review form
 
 private struct ReviewFormSheet: View {
     var courseTitle: String
@@ -317,7 +455,6 @@ private struct ReviewFormSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Шапка
                     VStack(spacing: 12) {
                         Circle()
                             .fill(Color(.secondarySystemFill))
@@ -329,7 +466,6 @@ private struct ReviewFormSheet: View {
                                     Image(systemName: "text.book.closed.fill").font(.title)
                                 }
                             }
-
                         Text("Курсы “\(courseTitle)”")
                             .font(.title3)
                             .padding(.horizontal, 16)
@@ -339,7 +475,6 @@ private struct ReviewFormSheet: View {
                     .frame(maxWidth: .infinity)
                     .background(RoundedRectangle(cornerRadius: 18).fill(Color.accentColor.opacity(0.12)))
 
-                    // Рейтинг
                     VStack(spacing: 14) {
                         Text("Поставьте оценку").foregroundStyle(.secondary)
                         StarsInput(rating: $rating)
@@ -348,7 +483,6 @@ private struct ReviewFormSheet: View {
                     .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemBackground)))
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(.separator), lineWidth: 0.5))
 
-                    // Поле
                     TextEditor(text: $text)
                         .frame(minHeight: 140)
                         .padding(10)
@@ -437,3 +571,11 @@ private let loremShort = "Lorem ipsum dolor sit amet, consectetur adipiscing eli
 private let loremLong = """
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Viverra habitant lacus, auctor nulla nec cursus nascetur. Sed elit, duis justo, neque mauris. Blandit tristique blandit est integer urna, aliquet. Suspendisse dignissim condimentum sit arcu egestas purus. Placerat mi volutpat tellus amet vestibulum. Tortor sed arcu gravida sed varius pellentesque tincidunt odio. Sit massa sit tellus molestie odio lectus senectus morbi lacus. Lacus, velit interdum est sed. Ullamcorper neque dignissim nibh elit id. Congue auctor eu dui volutpat cursus. Pellentesque nunc eleifend egestas praesent aliquam.
 """
+
+private extension DateFormatter {
+    static let review: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "dd.MM.yyyy / HH:mm"
+        return f
+    }()
+}
