@@ -5,7 +5,7 @@ struct ProfileScreen: View {
     @State private var rating: Double = 4.0
     @State private var certificates: [Certificate] = []
     @State private var pickedItems: [PhotosPickerItem] = []
-    @State private var companies: [Company] = Company.demoList
+    @State private var companies: [Company] = [Company.demoProfile]
 
     // Хранение языков в UserDefaults
     @AppStorage("profile.languages.v1") private var langsData: Data = Data()
@@ -13,9 +13,14 @@ struct ProfileScreen: View {
     @State private var showAddLanguage = false
 
     @EnvironmentObject private var profile: ProfileModel
+    
+    @State private var path: [ProfileRoute] = []
+    @State private var showQR = false
+
+    enum ProfileRoute: Hashable { case settings, about }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
 
@@ -265,9 +270,28 @@ struct ProfileScreen: View {
             }
             .navigationTitle("Профиль")
             .navigationBarTitleDisplayMode(.inline)
+            
+            .navigationDestination(for: ProfileRoute.self) { route in
+                switch route {
+                case .settings:
+                    SettingsView(openAbout: { path.append(.about) })
+                case .about:
+                    AboutAppView()
+                }
+            }
+            .sheet(isPresented: $showQR) {
+                QRSheet(
+                    text: profile.email.isEmpty ? "skillhub@example.com" : profile.email,
+                    avatar: profile.avatar
+                )
+            }
+
+            
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: settingsTapped) {
+                    Button {
+                        path.append(.settings)
+                    } label: {
                         if ImageAsset.exists("profile-settings") {
                             Image("profile-settings")
                                 .renderingMode(.original)
@@ -279,12 +303,11 @@ struct ProfileScreen: View {
                                 .frame(width: 22, height: 22)
                         }
                     }
-                    .buttonStyle(.plain)
                     .accessibilityLabel("Настройки")
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: qrTapped) {
+                    Button { showQR = true } label: {
                         if ImageAsset.exists("profile-qr") {
                             Image("profile-qr")
                                 .renderingMode(.original)
@@ -296,10 +319,10 @@ struct ProfileScreen: View {
                                 .frame(width: 22, height: 22)
                         }
                     }
-                    .buttonStyle(.plain)
                     .accessibilityLabel("QR")
                 }
             }
+
         }
     }
 
@@ -363,7 +386,11 @@ private struct QuickAction: View {
                     .frame(width: 48, height: 48)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemBackground)))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
-                Text(title).font(.footnote).foregroundStyle(.secondary)
+                Text(title)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .padding(.horizontal, 6)
         }

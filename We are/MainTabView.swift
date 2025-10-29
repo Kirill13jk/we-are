@@ -26,8 +26,11 @@ struct MainTabView: View {
                     Label("Профиль", systemImage: selected == .profile ? "person.fill" : "person")
                 }
                 .tag(Tab.profile)
+            
+            HRScreen()
+                .tabItem { Label("HR", systemImage: "person.2.fill") }
         }
-        .environmentObject(notifications)   // ← теперь переменная есть
+        .environmentObject(notifications)
         .tint(.accentColor)
     }
 }

@@ -1,59 +1,43 @@
-// HomeScreen.swift
 import SwiftUI
 
-
-// MARK: - Главный экран
+// MARK: - Главный экран (только компании)
 struct HomeScreen: View {
-    // Передаём список компаний извне (по умолчанию demo)
     var companies: [Company] = Company.demoList
 
-    // Демо-лента. В реальном проекте — подгрузка из сети
-    @State private var posts: [FeedPost] = []
-    
     @EnvironmentObject private var notifications: NotificationsStore
-
     @State private var search = ""
+    
+    @State private var posts: [Post] = Post.demo
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Поиск
-                    SearchField(text: $search, placeholder: "Поиск курсов")
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+        ScrollView {
+            VStack(spacing: 16) {
+                // Поиск
+                SearchField(text: $search, placeholder: "Поиск курсов")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
 
-                    // Секция компаний: горизонтальный скролл + "Все"
-                    CompaniesSection(
-                        title: "Компании",
-                        companies: filteredCompanies,
-                        allCompanies: companies
-                    )
-
-                    // Лента постов
-                    VStack(spacing: 16) {
-                        ForEach(posts.indices, id: \.self) { i in
-                            PostCard(post: $posts[i])
-                                .padding(.horizontal, 16)
-                        }
-                    }
-                    .padding(.top, 4)
-
-                    Spacer(minLength: 12)
-                }
+                // Контейнер компаний: заголовок + горизонтальный скролл + "Все"
+                CompaniesSection(
+                    title: "Компании",
+                    companies: filteredCompanies,
+                    allCompanies: companies
+                )
+                
+                NewsSection(posts: $posts)
+                    .padding(.top, 8)
             }
-            .navigationTitle("Главная")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        NotificationsScreen()
-                    } label: {
-                        BellBadge(count: notifications.unreadCount)
-                    }
-                    .padding(.trailing, 6)   // небольшой безопасный зазор
+        }
+        .navigationTitle("Главная")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    NotificationsScreen()
+                } label: {
+                    BellBadge(count: notifications.unreadCount)
                 }
+                .padding(.trailing, 6)
             }
-
         }
     }
 
@@ -65,6 +49,31 @@ struct HomeScreen: View {
     }
 }
 
+private struct CompanyLogoCircle: View {
+    var logoAsset: String?
+
+    var body: some View {
+        ZStack {
+            if let n = logoAsset, ImageAsset.exists(n) { // если нет утилиты exists — убери проверку
+                Image(n)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "building.2.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(6)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 36, height: 36)            // компактный размер
+        .clipShape(Circle())                      // делает изображение круглым
+        .overlay(Circle().stroke(Color(.separator), lineWidth: 0.8))  // тонкая окантовка
+        .background(Circle().fill(Color(.systemBackground)))          // белый фон под логотип
+    }
+}
+
+
 // MARK: - Поисковая строка
 private struct SearchField: View {
     @Binding var text: String
@@ -72,8 +81,7 @@ private struct SearchField: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField(placeholder, text: $text)
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
@@ -87,7 +95,7 @@ private struct SearchField: View {
     }
 }
 
-// MARK: - Шапка секции компаний + горизонтальная карусель
+// MARK: - Секция компаний + горизонтальная карусель
 private struct CompaniesSection: View {
     var title: String
     var companies: [Company]
@@ -96,17 +104,13 @@ private struct CompaniesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(title)
-                    .font(.title3)
-                    .foregroundStyle(Color.accentColor)
+                Text(title).font(.title3).foregroundStyle(Color.accentColor)
                 Spacer()
-                NavigationLink {
+                NavigationLink("Все") {
                     AllCompaniesView(companies: allCompanies)
-                } label: {
-                    Text("Все")
-                        .font(.callout)
-                        .foregroundStyle(Color.accentColor)
                 }
+                .font(.callout)
+                .foregroundStyle(Color.accentColor)
             }
             .padding(.horizontal, 16)
 
@@ -114,7 +118,6 @@ private struct CompaniesSection: View {
                 HStack(spacing: 14) {
                     ForEach(companies) { company in
                         NavigationLink {
-                            // Если у тебя есть собственный экран компании — он откроется тут
                             CompanyScreen(company: company)
                         } label: {
                             CompanyAvatar(name: company.name, logoAsset: company.logoAsset)
@@ -128,7 +131,7 @@ private struct CompaniesSection: View {
     }
 }
 
-// Кружок-аватар компании с подписью
+// Кружок-аватар компании с подписью (без UIKit-проверок)
 private struct CompanyAvatar: View {
     var name: String
     var logoAsset: String?
@@ -136,8 +139,8 @@ private struct CompanyAvatar: View {
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
-                if let n = logoAsset, ImageAsset.exists(n) {
-                    Image(n).resizable().scaledToFill()
+                if let n = logoAsset, !n.isEmpty {
+                    Image(n).resizable().scaledToFill()   // убедись, что ассет есть в Assets
                 } else {
                     Image(systemName: "building.2")
                         .resizable().scaledToFit()
@@ -159,59 +162,100 @@ private struct CompanyAvatar: View {
     }
 }
 
-// MARK: - Карточка поста
+
+// MARK: - News Section
+private struct NewsSection: View {
+    @Binding var posts: [Post]
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ForEach($posts) { $post in
+                PostCard(post: $post)
+                    .padding(.horizontal, 16)
+            }
+            Spacer(minLength: 8)
+        }
+    }
+}
+
+// MARK: - Post Card
 private struct PostCard: View {
-    @Binding var post: FeedPost
+    @Binding var post: Post
+    @State private var page = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Хедер: логотип, название
-            HStack(spacing: 10) {
-                CompanyAvatarSmall(name: post.company.name, logoAsset: post.company.logoAsset)
+            // Header
+            HStack(spacing: 8) {
+                CompanyLogoCircle(logoAsset: post.company.logoAsset)
+                    .padding(.trailing, 6)
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.company.name).font(.headline)
-                    Text(post.timeAgo).font(.caption).foregroundStyle(.secondary)
+                    Text(post.company.category).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { post.isSaved.toggle() } label: {
-                    Image(systemName: "bookmark")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
+                Image(systemName: "ellipsis").foregroundStyle(.secondary)
             }
 
-            // Фото
-            PostImage(imageName: post.imageName)
-
-            // Экшены
-            HStack(spacing: 16) {
-                Button { post.isLiked.toggle(); if post.isLiked { post.likes += 1 } else { post.likes = max(0, post.likes-1) } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: post.isLiked ? "heart.fill" : "heart")
-                        Text("\(post.likes)")
+            // Images pager
+            ZStack(alignment: .bottom) {
+                TabView(selection: $page) {
+                    ForEach(Array(post.images.enumerated()), id: \.offset) { idx, name in
+                        Group {
+                            if ImageAsset.exists(name) {
+                                Image(name).resizable().scaledToFill()
+                            } else {
+                                RoundedRectangle(cornerRadius: 0).fill(Color(.systemGray5))
+                                    .overlay(Image(systemName: "photo").font(.largeTitle).foregroundStyle(.secondary))
+                            }
+                        }
+                        .tag(idx)
+                        .frame(height: 260)
+                        .clipped()
                     }
                 }
-                .buttonStyle(.plain)
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 260)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                // dots
+                PageDots(count: post.images.count, index: page)
+                    .padding(.bottom, 10)
+            }
+
+            // Actions
+            HStack(spacing: 14) {
+                Button {
+                    post.liked.toggle()
+                    post.likes += post.liked ? 1 : -1
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: post.liked ? "heart.fill" : "heart")
+                        Text("\(post.likes)")
+                    }
+                    .font(.headline)
+                }
 
                 Spacer()
 
-                // индикатор страниц «…» декоративный
-                HStack(spacing: 6) {
-                    Circle().frame(width: 6, height: 6)
-                    Circle().frame(width: 6, height: 6).opacity(0.35)
-                    Circle().frame(width: 6, height: 6).opacity(0.35)
+                Button {
+                    post.saved.toggle()
+                } label: {
+                    Image(systemName: post.saved ? "bookmark.fill" : "bookmark")
+                        .font(.headline)
                 }
-                .foregroundStyle(.secondary)
             }
-            .font(.subheadline)
+            .tint(.primary)
 
-            // Текст
+            // Caption + time
             Text(post.text)
-                .lineLimit(2)
-                .foregroundStyle(.primary)
                 .font(.subheadline)
+                .lineLimit(2)
 
+            Text(post.date, style: .relative)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(12)
         .background(
@@ -222,105 +266,23 @@ private struct PostCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color(.separator), lineWidth: 0.5)
         )
+        .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
     }
 }
 
-private struct CompanyAvatarSmall: View {
-    var name: String
-    var logoAsset: String?
-
+// MARK: - Page Dots
+private struct PageDots: View {
+    var count: Int
+    var index: Int
     var body: some View {
-        ZStack {
-            if let n = logoAsset, ImageAsset.exists(n) {
-                Image(n).resizable().scaledToFill()
-            } else {
-                Image(systemName: "building.2")
-                    .resizable().scaledToFit()
-                    .padding(6)
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+            ForEach(0..<max(count, 1), id: \.self) { i in
+                Circle()
+                    .fill(i == index ? Color.primary : Color.secondary.opacity(0.3))
+                    .frame(width: 6, height: 6)
             }
         }
-        .frame(width: 36, height: 36)
-        .background(Color(.systemBackground))
-        .clipShape(Circle())
-        .overlay(Circle().stroke(Color(.separator), lineWidth: 0.5))
-    }
-}
-
-private struct PostImage: View {
-    var imageName: String?
-
-    var body: some View {
-        Group {
-            if let n = imageName, ImageAsset.exists(n) {
-                Image(n).resizable().scaledToFill()
-            } else {
-                // Плейсхолдер
-                ZStack {
-                    Rectangle().fill(Color(.secondarySystemBackground))
-                    Image(systemName: "photo")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(4/3, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-// Кнопка с колокольчиком и бейджем
-private struct BellButton: View {
-    var badge: Int = 0
-    var action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "bell")
-                    .font(.title3)
-                if badge > 0 {
-                    Text("\(badge)")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(Capsule().fill(.red))
-                        .offset(x: 8, y: -8)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Уведомления")
-    }
-}
-
-// MARK: - Модели ленты (демо)
-struct FeedPost: Identifiable {
-    let id = UUID()
-    let company: Company
-    let imageName: String?
-    var text: String
-    var likes: Int
-    var timeAgo: String
-    var isLiked: Bool = false
-    var isSaved: Bool = false
-}
-
-extension FeedPost {
-    static func demo(companies: [Company]) -> [FeedPost] {
-        var result: [FeedPost] = []
-        let imgs = ["post-1", "post-2", "post-3"] // добавь ассеты при желании
-        for (i, c) in companies.enumerated().prefix(6) {
-            result.append(
-                FeedPost(
-                    company: c,
-                    imageName: imgs.indices.contains(i) ? imgs[i] : nil,
-                    text: "Идеальная формула для тех, кто любит брать от жизни всё! Подробнее в посте…",
-                    likes: Int.random(in: 50...240),
-                    timeAgo: ["2 часа назад", "вчера", "3 дня назад"].randomElement()!
-                )
-            )
-        }
-        return result
+        .padding(6)
+        .background(.ultraThinMaterial, in: Capsule())
     }
 }
